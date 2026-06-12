@@ -12,6 +12,7 @@
  */
 
 import * as crypto from "node:crypto";
+import type { SessionClient } from "@a5345534/pi-session";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import type {
 	ExtensionUIContext,
@@ -25,6 +26,7 @@ import {
 	waitForRawStdoutBackpressure,
 	writeRawStdout,
 } from "../../core/output-guard.ts";
+import { createAgentSessionOwner } from "../../core/session-owner-adapter.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { type Theme, theme } from "../interactive/theme/theme.ts";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.ts";
@@ -73,6 +75,33 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 
 	const error = (id: string | undefined, command: string, message: string): RpcResponse => {
 		return { id, type: "response", command, success: false, error: message };
+	};
+
+	const createSessionClient = (): SessionClient =>
+		createAgentSessionOwner(runtimeHost, { ownerId: "coding-agent-rpc" });
+	let sessionClient = createSessionClient();
+	let replacingViaSessionClient = false;
+	let hasBoundSession = false;
+
+	const isSessionOwnerCancellation = (err: unknown, message: string): boolean =>
+		err instanceof Error && err.message === message;
+
+	const runClientReplacement = async (
+		cancelledMessage: string,
+		operation: () => Promise<void>,
+	): Promise<{ cancelled: boolean }> => {
+		replacingViaSessionClient = true;
+		try {
+			await operation();
+			return { cancelled: false };
+		} catch (err) {
+			if (isSessionOwnerCancellation(err, cancelledMessage)) {
+				return { cancelled: true };
+			}
+			throw err;
+		} finally {
+			replacingViaSessionClient = false;
+		}
 	};
 
 	// Pending extension UI requests waiting for response
@@ -357,6 +386,11 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 		unsubscribeBackpressure = session.agent.subscribe(async () => {
 			await waitForRawStdoutBackpressure();
 		});
+
+		if (hasBoundSession && !replacingViaSessionClient) {
+			sessionClient = createSessionClient();
+		}
+		hasBoundSession = true;
 	};
 
 	const registerSignalHandlers = (): void => {
@@ -422,16 +456,21 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			}
 
 			case "abort": {
-				await session.abort();
+				await sessionClient.sendCommand(session.sessionId, { type: "turn.abort", commandId: id });
 				return success(id, "abort");
 			}
 
 			case "new_session": {
-				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
-				const result = await runtimeHost.newSession(options);
-				if (!result.cancelled) {
-					await rebindSession();
-				}
+				const options = command.parentSession
+					? { cwd: session.sessionManager.getCwd(), parentSessionId: command.parentSession }
+					: { cwd: session.sessionManager.getCwd() };
+				const result = await runClientReplacement("Session creation cancelled", async () => {
+					await sessionClient.sendCommand(session.sessionId, {
+						type: "session.new",
+						commandId: id,
+						options,
+					});
+				});
 				return success(id, "new_session", result);
 			}
 
@@ -467,7 +506,15 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				if (!model) {
 					return error(id, "set_model", `Model not found: ${command.provider}/${command.modelId}`);
 				}
-				await session.setModel(model);
+				await sessionClient.sendCommand(session.sessionId, {
+					type: "model.change",
+					commandId: id,
+					model: {
+						providerId: model.provider,
+						modelId: model.id,
+						displayName: model.name,
+					},
+				});
 				return success(id, "set_model", model);
 			}
 
@@ -489,7 +536,11 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// =================================================================
 
 			case "set_thinking_level": {
-				session.setThinkingLevel(command.level);
+				await sessionClient.sendCommand(session.sessionId, {
+					type: "thinking.change",
+					commandId: id,
+					thinking: { level: command.level },
+				});
 				return success(id, "set_thinking_level");
 			}
 
@@ -574,19 +625,31 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			}
 
 			case "switch_session": {
-				const result = await runtimeHost.switchSession(command.sessionPath);
-				if (!result.cancelled) {
-					await rebindSession();
-				}
+				const result = await runClientReplacement("Session restore cancelled", async () => {
+					await sessionClient.sendCommand(session.sessionId, {
+						type: "session.open",
+						commandId: id,
+						target: { kind: "session-file", path: command.sessionPath, cwd: process.cwd() },
+					});
+				});
 				return success(id, "switch_session", result);
 			}
 
 			case "fork": {
-				const result = await runtimeHost.fork(command.entryId);
-				if (!result.cancelled) {
-					await rebindSession();
-				}
-				return success(id, "fork", { text: result.selectedText, cancelled: result.cancelled });
+				const selectedText = session
+					.getUserMessagesForForking()
+					.find((message) => message.entryId === command.entryId)?.text;
+				const result = await runClientReplacement("Session fork cancelled", async () => {
+					await sessionClient.sendCommand(session.sessionId, {
+						type: "session.fork",
+						commandId: id,
+						target: {
+							source: { kind: "session-id", sessionId: session.sessionId },
+							entryId: command.entryId,
+						},
+					});
+				});
+				return success(id, "fork", { text: selectedText, cancelled: result.cancelled });
 			}
 
 			case "clone": {
@@ -594,8 +657,9 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				if (!leafId) {
 					return error(id, "clone", "Cannot clone session: no current entry selected");
 				}
+				const previousSession = session;
 				const result = await runtimeHost.fork(leafId, { position: "at" });
-				if (!result.cancelled) {
+				if (!result.cancelled && session === previousSession && runtimeHost.session !== previousSession) {
 					await rebindSession();
 				}
 				return success(id, "clone", { cancelled: result.cancelled });

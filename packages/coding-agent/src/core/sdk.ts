@@ -94,6 +94,26 @@ export interface CreateAgentSessionResult {
 
 // Re-exports
 
+export type {
+	CreateSessionOptions,
+	ForkSessionTarget,
+	SessionClient,
+	SessionCommand,
+	SessionEventListener,
+	SessionHandle,
+	SessionListItem,
+	SessionListQuery,
+	SessionOwner,
+	SessionOwnerEvent,
+	SessionSnapshot,
+	SessionTarget,
+	Unsubscribe,
+} from "@a5345534/pi-session";
+export {
+	SESSION_COMMAND_TYPES,
+	SESSION_OWNER_CONTRACT_VERSION,
+	SESSION_OWNER_EVENT_TYPES,
+} from "@a5345534/pi-session";
 export * from "./agent-session-runtime.ts";
 export type {
 	ExtensionAPI,
@@ -105,6 +125,8 @@ export type {
 	ToolDefinition,
 } from "./extensions/index.ts";
 export type { PromptTemplate } from "./prompt-templates.ts";
+export type { AgentSessionOwnerOptions, CodingAgentSessionClient } from "./session-owner-adapter.ts";
+export { AgentSessionOwner, createAgentSessionOwner } from "./session-owner-adapter.ts";
 export type { Skill } from "./skills.ts";
 export type { Tool } from "./tools/index.ts";
 
