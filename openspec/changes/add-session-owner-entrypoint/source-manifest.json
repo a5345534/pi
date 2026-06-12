@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "changeName": "add-session-owner-entrypoint",
+  "generatedAt": "2026-06-12T11:39:15.094533+00:00",
+  "sources": [
+    {
+      "path": "proposal.md",
+      "kind": "proposal",
+      "sha256": "67cf52f4ef690c388fab615c93505a7044fa5036c4df8b41fed0bebd111d6752"
+    },
+    {
+      "path": "design.md",
+      "kind": "design",
+      "sha256": "7bce9dfbacc5b135dc6815c73c83d945abae0e440aa3e8451433c531082c933c"
+    },
+    {
+      "path": "tasks.md",
+      "kind": "tasks",
+      "sha256": "11c5da2d641e372001c51005056e23c845e75d1677fa1dbaa23115edff340480"
+    },
+    {
+      "path": "specs/session-owner-boundary/spec.md",
+      "kind": "spec-delta",
+      "sha256": "141d57e9cd841f2472b319d5741c1acc39f7d53b6b01fe8bcbc1481dd3769eb2"
+    }
+  ]
+}
