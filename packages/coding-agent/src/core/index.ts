@@ -75,4 +75,10 @@ export {
 	type TurnStartEvent,
 	type WorkingIndicatorOptions,
 } from "./extensions/index.ts";
+export {
+	AgentSessionOwner,
+	type AgentSessionOwnerOptions,
+	type CodingAgentSessionClient,
+	createAgentSessionOwner,
+} from "./session-owner-adapter.ts";
 export { createSyntheticSourceInfo } from "./source-info.ts";

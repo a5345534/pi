@@ -1,3 +1,4 @@
+import { configureSessionStorageDefaults } from "@a5345534/pi-session/session-manager";
 import { accessSync, constants, existsSync, readFileSync, realpathSync } from "fs";
 import { homedir } from "os";
 import { basename, dirname, join, resolve, sep, win32 } from "path";
@@ -498,6 +499,11 @@ export function getAgentDir(): string {
 	return join(homedir(), CONFIG_DIR_NAME, "agent");
 }
 
+export function getConfiguredSessionDir(): string | undefined {
+	const envDir = process.env[ENV_SESSION_DIR];
+	return envDir ? expandTildePath(envDir) : undefined;
+}
+
 /** Get path to user's custom themes directory */
 export function getCustomThemesDir(): string {
 	return join(getAgentDir(), "themes");
@@ -542,3 +548,9 @@ export function getSessionsDir(): string {
 export function getDebugLogPath(): string {
 	return join(getAgentDir(), `${APP_NAME}-debug.log`);
 }
+
+configureSessionStorageDefaults({
+	agentDir: getAgentDir,
+	sessionsDir: getSessionsDir,
+	sessionDir: getConfiguredSessionDir,
+});

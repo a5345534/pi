@@ -17,7 +17,14 @@ import { readdir, stat } from "fs/promises";
 import { join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
-import { getAgentDir as getDefaultAgentDir, getSessionsDir } from "./config.ts";
+import {
+	configureSessionStorageDefaults,
+	getSessionsDir,
+	type ResolvedSessionStorageOptions,
+	resolveSessionStorageOptions,
+	type SessionStorageDefaults,
+	type SessionStorageOptions,
+} from "./config.ts";
 import {
 	type BashExecutionMessage,
 	type CustomMessage,
@@ -26,6 +33,9 @@ import {
 	createCustomMessage,
 } from "./messages.ts";
 import { normalizePath, resolvePath } from "./utils/paths.ts";
+
+export { configureSessionStorageDefaults, getSessionsDir, resolveSessionStorageOptions };
+export type { ResolvedSessionStorageOptions, SessionStorageDefaults, SessionStorageOptions };
 
 export const CURRENT_SESSION_VERSION = 3;
 
@@ -431,23 +441,106 @@ export function buildSessionContext(
 	return { messages, thinkingLevel, model };
 }
 
-/**
- * Compute the default session directory for a cwd.
- * Encodes cwd into a safe directory name under ~/.pi/agent/sessions/.
- */
-function getDefaultSessionDirPath(cwd: string, agentDir: string = getDefaultAgentDir()): string {
-	const resolvedCwd = resolvePath(cwd);
-	const resolvedAgentDir = resolvePath(agentDir);
-	const safePath = `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-	return join(resolvedAgentDir, "sessions", safePath);
+export type SessionStorageInput = string | SessionStorageOptions;
+
+function toSessionStorageOptions(storage?: SessionStorageInput): SessionStorageOptions | undefined {
+	return typeof storage === "string" ? { agentDir: storage } : storage;
 }
 
-export function getDefaultSessionDir(cwd: string, agentDir: string = getDefaultAgentDir()): string {
-	const sessionDir = getDefaultSessionDirPath(cwd, agentDir);
+function isSessionStorageOptions(input: string | SessionStorageOptions | undefined): input is SessionStorageOptions {
+	return typeof input === "object" && input !== null;
+}
+
+/**
+ * Compute the default per-cwd session directory for a host-provided storage root.
+ * Encodes cwd into a safe directory name under the host's sessions directory.
+ */
+function getDefaultSessionDirPath(cwd: string, storage?: SessionStorageInput): string {
+	const storageOptions = resolveSessionStorageOptions(toSessionStorageOptions(storage));
+	if (storageOptions.sessionDir) {
+		return storageOptions.sessionDir;
+	}
+	const resolvedCwd = resolvePath(cwd);
+	const resolvedSessionsDir = resolvePath(getSessionsDir(storageOptions));
+	const safePath = `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+	return join(resolvedSessionsDir, safePath);
+}
+
+export function getDefaultSessionDir(cwd: string, storage?: SessionStorageInput): string {
+	const sessionDir = getDefaultSessionDirPath(cwd, storage);
 	if (!existsSync(sessionDir)) {
 		mkdirSync(sessionDir, { recursive: true });
 	}
 	return sessionDir;
+}
+
+interface ResolvedSessionDirectory {
+	dir: string;
+	defaultDir?: string;
+}
+
+function getMatchingConfiguredDefaultSessionDir(cwd: string, dir: string): string | undefined {
+	try {
+		const storageOptions = resolveSessionStorageOptions();
+		if (storageOptions.sessionDir) return undefined;
+		const defaultDir = getDefaultSessionDirPath(cwd, storageOptions);
+		return normalizePath(dir) === defaultDir ? defaultDir : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function resolveSessionDirectory(cwd: string, input?: string | SessionStorageOptions): ResolvedSessionDirectory {
+	if (typeof input === "string") {
+		const dir = normalizePath(input);
+		return { dir, defaultDir: getMatchingConfiguredDefaultSessionDir(cwd, dir) };
+	}
+
+	const storageOptions = resolveSessionStorageOptions(input);
+	if (storageOptions.sessionDir) {
+		return {
+			dir: storageOptions.sessionDir,
+			defaultDir: getMatchingConfiguredDefaultSessionDir(cwd, storageOptions.sessionDir),
+		};
+	}
+
+	const defaultDir = getDefaultSessionDirPath(cwd, storageOptions);
+	return { dir: defaultDir, defaultDir };
+}
+
+function ensureSessionDirectory(cwd: string, input?: string | SessionStorageOptions): ResolvedSessionDirectory {
+	const location = resolveSessionDirectory(cwd, input);
+	if (!existsSync(location.dir)) {
+		mkdirSync(location.dir, { recursive: true });
+	}
+	return location;
+}
+
+function resolveOpenSessionDirectory(
+	cwd: string,
+	path: string,
+	input?: string | SessionStorageOptions,
+): ResolvedSessionDirectory {
+	if (typeof input === "string") {
+		const dir = normalizePath(input);
+		return { dir, defaultDir: getMatchingConfiguredDefaultSessionDir(cwd, dir) };
+	}
+	if (isSessionStorageOptions(input) && input.sessionDir) {
+		const dir = normalizePath(input.sessionDir);
+		return { dir, defaultDir: getMatchingConfiguredDefaultSessionDir(cwd, dir) };
+	}
+
+	const dir = resolve(path, "..");
+	try {
+		const storageOptions = resolveSessionStorageOptions(input);
+		if (!storageOptions.sessionDir) {
+			return { dir, defaultDir: getDefaultSessionDirPath(cwd, storageOptions) };
+		}
+	} catch {
+		// A session file path is sufficient to open a manager; host defaults are only needed
+		// to determine whether the path is the host's default per-cwd directory.
+	}
+	return { dir };
 }
 
 const SESSION_READ_BUFFER_SIZE = 1024 * 1024;
@@ -758,6 +851,7 @@ export class SessionManager {
 	private sessionId: string = "";
 	private sessionFile: string | undefined;
 	private sessionDir: string;
+	private defaultSessionDir: string | undefined;
 	private cwd: string;
 	private persist: boolean;
 	private flushed: boolean = false;
@@ -773,9 +867,11 @@ export class SessionManager {
 		sessionFile: string | undefined,
 		persist: boolean,
 		newSessionOptions?: NewSessionOptions,
+		defaultSessionDir?: string,
 	) {
 		this.cwd = resolvePath(cwd);
 		this.sessionDir = normalizePath(sessionDir);
+		this.defaultSessionDir = defaultSessionDir ? normalizePath(defaultSessionDir) : undefined;
 		this.persist = persist;
 		if (persist && this.sessionDir && !existsSync(this.sessionDir)) {
 			mkdirSync(this.sessionDir, { recursive: true });
@@ -894,7 +990,7 @@ export class SessionManager {
 	}
 
 	usesDefaultSessionDir(): boolean {
-		return this.sessionDir === getDefaultSessionDirPath(this.cwd);
+		return this.defaultSessionDir !== undefined && this.sessionDir === this.defaultSessionDir;
 	}
 
 	getSessionId(): string {
@@ -1380,43 +1476,43 @@ export class SessionManager {
 	/**
 	 * Create a new session.
 	 * @param cwd Working directory (stored in session header)
-	 * @param sessionDir Optional session directory. If omitted, uses default (~/.pi/agent/sessions/<encoded-cwd>/).
+	 * @param storage Optional explicit session directory string, or host-provided storage options.
 	 */
-	static create(cwd: string, sessionDir?: string, options?: NewSessionOptions): SessionManager {
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
-		return new SessionManager(cwd, dir, undefined, true, options);
+	static create(cwd: string, storage?: string | SessionStorageOptions, options?: NewSessionOptions): SessionManager {
+		const location = ensureSessionDirectory(cwd, storage);
+		return new SessionManager(cwd, location.dir, undefined, true, options, location.defaultDir);
 	}
 
 	/**
 	 * Open a specific session file.
 	 * @param path Path to session file
-	 * @param sessionDir Optional session directory for /new or /branch. If omitted, derives from file's parent.
+	 * @param storage Optional explicit session directory string, or host-provided storage options for /new or /branch. If omitted, derives from file's parent.
 	 * @param cwdOverride Optional cwd override instead of the session header cwd.
 	 */
-	static open(path: string, sessionDir?: string, cwdOverride?: string): SessionManager {
+	static open(path: string, storage?: string | SessionStorageOptions, cwdOverride?: string): SessionManager {
 		const resolvedPath = resolvePath(path);
 		// Extract cwd from session header if possible, otherwise use process.cwd()
 		const entries = loadEntriesFromFile(resolvedPath);
 		const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
 		const cwd = cwdOverride ?? header?.cwd ?? process.cwd();
-		// If no sessionDir provided, derive from file's parent directory
-		const dir = sessionDir ? normalizePath(sessionDir) : resolve(resolvedPath, "..");
-		return new SessionManager(cwd, dir, resolvedPath, true);
+		// If no storage directory is provided, derive from the file's parent directory.
+		const location = resolveOpenSessionDirectory(cwd, resolvedPath, storage);
+		return new SessionManager(cwd, location.dir, resolvedPath, true, undefined, location.defaultDir);
 	}
 
 	/**
 	 * Continue the most recent session, or create new if none.
 	 * @param cwd Working directory
-	 * @param sessionDir Optional session directory. If omitted, uses default (~/.pi/agent/sessions/<encoded-cwd>/).
+	 * @param storage Optional explicit session directory string, or host-provided storage options.
 	 */
-	static continueRecent(cwd: string, sessionDir?: string): SessionManager {
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
-		const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-		const mostRecent = findMostRecentSession(dir, filterCwd ? cwd : undefined);
+	static continueRecent(cwd: string, storage?: string | SessionStorageOptions): SessionManager {
+		const location = ensureSessionDirectory(cwd, storage);
+		const filterCwd = location.defaultDir === undefined;
+		const mostRecent = findMostRecentSession(location.dir, filterCwd ? cwd : undefined);
 		if (mostRecent) {
-			return new SessionManager(cwd, dir, mostRecent, true);
+			return new SessionManager(cwd, location.dir, mostRecent, true, undefined, location.defaultDir);
 		}
-		return new SessionManager(cwd, dir, undefined, true);
+		return new SessionManager(cwd, location.dir, undefined, true, undefined, location.defaultDir);
 	}
 
 	/** Create an in-memory session (no file persistence) */
@@ -1429,12 +1525,12 @@ export class SessionManager {
 	 * Creates a new session in the target cwd with the full history from the source session.
 	 * @param sourcePath Path to the source session file
 	 * @param targetCwd Target working directory (where the new session will be stored)
-	 * @param sessionDir Optional session directory. If omitted, uses default for targetCwd.
+	 * @param storage Optional explicit session directory string, or host-provided storage options.
 	 */
 	static forkFrom(
 		sourcePath: string,
 		targetCwd: string,
-		sessionDir?: string,
+		storage?: string | SessionStorageOptions,
 		options?: NewSessionOptions,
 	): SessionManager {
 		const resolvedSourcePath = resolvePath(sourcePath);
@@ -1449,10 +1545,8 @@ export class SessionManager {
 			throw new Error(`Cannot fork: source session has no header: ${resolvedSourcePath}`);
 		}
 
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(resolvedTargetCwd);
-		if (!existsSync(dir)) {
-			mkdirSync(dir, { recursive: true });
-		}
+		const location = ensureSessionDirectory(resolvedTargetCwd, storage);
+		const dir = location.dir;
 
 		// Create new session file with new ID but forked content
 		if (options?.id !== undefined) {
@@ -1481,20 +1575,24 @@ export class SessionManager {
 			}
 		}
 
-		return new SessionManager(resolvedTargetCwd, dir, newSessionFile, true);
+		return new SessionManager(resolvedTargetCwd, dir, newSessionFile, true, undefined, location.defaultDir);
 	}
 
 	/**
 	 * List all sessions for a directory.
 	 * @param cwd Working directory (used to compute default session directory)
-	 * @param sessionDir Optional session directory. If omitted, uses default (~/.pi/agent/sessions/<encoded-cwd>/).
+	 * @param storage Optional explicit session directory string, or host-provided storage options.
 	 * @param onProgress Optional callback for progress updates (loaded, total)
 	 */
-	static async list(cwd: string, sessionDir?: string, onProgress?: SessionListProgress): Promise<SessionInfo[]> {
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
-		const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
+	static async list(
+		cwd: string,
+		storage?: string | SessionStorageOptions,
+		onProgress?: SessionListProgress,
+	): Promise<SessionInfo[]> {
+		const location = resolveSessionDirectory(cwd, storage);
+		const filterCwd = location.defaultDir === undefined;
 		const resolvedCwd = resolvePath(cwd);
-		const sessions = (await listSessionsFromDir(dir, onProgress)).filter(
+		const sessions = (await listSessionsFromDir(location.dir, onProgress)).filter(
 			(session) => !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd),
 		);
 		sessions.sort((a, b) => b.modified.getTime() - a.modified.getTime());
@@ -1506,21 +1604,30 @@ export class SessionManager {
 	 * @param onProgress Optional callback for progress updates (loaded, total)
 	 */
 	static async listAll(onProgress?: SessionListProgress): Promise<SessionInfo[]>;
-	static async listAll(sessionDir?: string, onProgress?: SessionListProgress): Promise<SessionInfo[]>;
 	static async listAll(
-		sessionDirOrOnProgress?: string | SessionListProgress,
+		storage?: string | SessionStorageOptions,
+		onProgress?: SessionListProgress,
+	): Promise<SessionInfo[]>;
+	static async listAll(
+		storageOrOnProgress?: string | SessionStorageOptions | SessionListProgress,
 		onProgress?: SessionListProgress,
 	): Promise<SessionInfo[]> {
-		const customSessionDir =
-			typeof sessionDirOrOnProgress === "string" ? normalizePath(sessionDirOrOnProgress) : undefined;
-		const progress = typeof sessionDirOrOnProgress === "function" ? sessionDirOrOnProgress : onProgress;
-		if (customSessionDir) {
-			const sessions = await listSessionsFromDir(customSessionDir, progress);
+		const progress = typeof storageOrOnProgress === "function" ? storageOrOnProgress : onProgress;
+		const storage = typeof storageOrOnProgress === "function" ? undefined : storageOrOnProgress;
+		if (typeof storage === "string") {
+			const sessions = await listSessionsFromDir(normalizePath(storage), progress);
 			sessions.sort((a, b) => b.modified.getTime() - a.modified.getTime());
 			return sessions;
 		}
 
-		const sessionsDir = getSessionsDir();
+		const storageOptions = resolveSessionStorageOptions(storage);
+		if (storageOptions.sessionDir) {
+			const sessions = await listSessionsFromDir(normalizePath(storageOptions.sessionDir), progress);
+			sessions.sort((a, b) => b.modified.getTime() - a.modified.getTime());
+			return sessions;
+		}
+
+		const sessionsDir = getSessionsDir(storageOptions);
 
 		try {
 			if (!existsSync(sessionsDir)) {
