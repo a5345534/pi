@@ -11,6 +11,7 @@
 			"dependencies": {
 				"@earendil-works/pi-agent-core": "^0.79.1",
 				"@earendil-works/pi-ai": "^0.79.1",
+				"@earendil-works/pi-session": "^0.79.1",
 				"@earendil-works/pi-tui": "^0.79.1",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
@@ -509,6 +510,18 @@
 				"node": ">=22.19.0"
 			}
 		},
+		"node_modules/@earendil-works/pi-session": {
+			"version": "0.79.1",
+			"resolved": "https://registry.npmjs.org/@earendil-works/pi-session/-/pi-session-0.79.1.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"@earendil-works/pi-agent-core": "^0.79.1",
+				"@earendil-works/pi-ai": "^0.79.1"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
 		"node_modules/@earendil-works/pi-tui": {
 			"version": "0.79.1",
 			"resolved": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.79.1.tgz",
@@ -626,9 +639,6 @@
 			"cpu": [
 				"arm64"
 			],
-			"libc": [
-				"glibc"
-			],
 			"optional": true
 		},
 		"node_modules/@mariozechner/clipboard-linux-arm64-musl": {
@@ -644,9 +654,6 @@
 			],
 			"cpu": [
 				"arm64"
-			],
-			"libc": [
-				"musl"
 			],
 			"optional": true
 		},
@@ -664,9 +671,6 @@
 			"cpu": [
 				"riscv64"
 			],
-			"libc": [
-				"glibc"
-			],
 			"optional": true
 		},
 		"node_modules/@mariozechner/clipboard-linux-x64-gnu": {
@@ -683,9 +687,6 @@
 			"cpu": [
 				"x64"
 			],
-			"libc": [
-				"glibc"
-			],
 			"optional": true
 		},
 		"node_modules/@mariozechner/clipboard-linux-x64-musl": {
@@ -701,9 +702,6 @@
 			],
 			"cpu": [
 				"x64"
-			],
-			"libc": [
-				"musl"
 			],
 			"optional": true
 		},

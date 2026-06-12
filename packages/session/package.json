@@ -1,0 +1,54 @@
+{
+	"name": "@earendil-works/pi-session",
+	"version": "0.79.1",
+	"description": "Session persistence and tree management for Pi agents",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./messages": {
+			"types": "./dist/messages.d.ts",
+			"import": "./dist/messages.js"
+		},
+		"./session-cwd": {
+			"types": "./dist/session-cwd.d.ts",
+			"import": "./dist/session-cwd.js"
+		},
+		"./session-manager": {
+			"types": "./dist/session-manager.d.ts",
+			"import": "./dist/session-manager.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": ["dist", "README.md"],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json",
+		"test": "vitest --run",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"dependencies": {
+		"@earendil-works/pi-agent-core": "^0.79.1",
+		"@earendil-works/pi-ai": "^0.79.1"
+	},
+	"devDependencies": {
+		"@types/node": "24.12.4",
+		"typescript": "5.9.3",
+		"vitest": "3.2.4"
+	},
+	"keywords": ["ai", "agent", "session", "jsonl"],
+	"author": "Mario Zechner",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/earendil-works/pi.git",
+		"directory": "packages/session"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}
