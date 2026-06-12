@@ -40,9 +40,9 @@
 
 ## 6. Documentation / Closeout
 
-- [ ] 6.1 Update relevant package README/docs after public owner/client imports exist.
-- [ ] 6.2 Refresh `source-manifest.json` after spec changes.
-- [ ] 6.3 Validate `change-explainer.html` if generated for review.
+- [x] 6.1 Update relevant package README/docs after public owner/client imports exist.
+- [x] 6.2 Refresh `source-manifest.json` after spec changes.
+- [x] 6.3 Validate `change-explainer.html` if generated for review.
 - [ ] 6.4 Run archive preflight only after implementation and non-backlog tasks are complete.
 
 ## Backlog / Follow-ups

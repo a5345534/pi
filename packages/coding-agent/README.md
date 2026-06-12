@@ -470,6 +470,8 @@ await session.prompt("What files are in the current directory?");
 
 For advanced multi-session runtime replacement, use `createAgentSessionRuntime()` and `AgentSessionRuntime`.
 
+For the shared session owner boundary, import `SessionOwner`, `SessionClient`, `SessionCommand`, and `SessionSnapshot` from `@a5345534/pi-session`. `@a5345534/pi-coding-agent` also exports `createAgentSessionOwner()` and `CodingAgentSessionClient` for the current in-process adapter.
+
 See [docs/sdk.md](docs/sdk.md) and [examples/sdk/](examples/sdk/).
 
 ### RPC Mode

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "changeName": "add-session-owner-entrypoint",
-  "generatedAt": "2026-06-12T11:39:15.094533+00:00",
+  "generatedAt": "2026-06-12T13:46:38.009787+00:00",
   "sources": [
     {
       "path": "proposal.md",
@@ -16,7 +16,7 @@
     {
       "path": "tasks.md",
       "kind": "tasks",
-      "sha256": "11c5da2d641e372001c51005056e23c845e75d1677fa1dbaa23115edff340480"
+      "sha256": "f1cbceccff6ef5472a3cb4af552e799e3f2fc5884e2b39b6e26ef6f774f17242"
     },
     {
       "path": "specs/session-owner-boundary/spec.md",

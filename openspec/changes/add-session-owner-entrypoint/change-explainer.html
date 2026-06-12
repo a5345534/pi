@@ -183,7 +183,7 @@
     <header class="hero">
       <div class="eyebrow">OpenSpec Decision Review</div>
       <h1>Session Owner Entry Point</h1>
-      <p class="summary">本頁是 <code>add-session-owner-entrypoint</code> 的決策審查輔助頁。它根據 proposal、design、tasks 與 <code>session-owner-boundary</code> spec，說明 <code>packages/session</code> 與 <code>packages/coding-agent</code> 的責任邊界、要開發的內容、明確不開發的內容，以及後續實作切片。</p>
+      <p class="summary">本頁是 <code>add-session-owner-entrypoint</code> 的決策審查輔助頁；它只根據 proposal、design、tasks 與 <code>session-owner-boundary</code> spec 摘要決策，不新增需求。若本頁與 markdown/spec 不一致，以 markdown/spec 為準。</p>
       <div class="chips" aria-label="change metadata">
         <span class="chip">Capability: <code>session-owner-boundary</code></span>
         <span class="chip">Change: <code>add-session-owner-entrypoint</code></span>
@@ -494,6 +494,7 @@
         <ul>
           <li>OpenSpec source files 已存在：<code>proposal.md</code>、<code>design.md</code>、<code>tasks.md</code>、<code>specs/session-owner-boundary/spec.md</code>。</li>
           <li><code>source-manifest.json</code> 已刷新並驗證為非 stale。</li>
+          <li>包級 README 已更新，說明 <code>SessionOwner</code>/<code>SessionClient</code> 公開匯出與 host-provided storage defaults。</li>
           <li>本頁是 review companion，不取代 markdown/spec source of truth。</li>
           <li><strong>Open Questions 已決議 (resolve-contract-decisions node)：</strong>第一階段 types-only，不含 reference owner；stable public event names 已分類（<code>session.*</code>, <code>turn.*</code>, <code>message.*</code>, <code>tool.*</code>, <code>compaction.*</code>, <code>model.*</code>, <code>thinking.*</code>, <code>error</code>），JSONL entry types 與 coding-agent extension events 為內部細節。</li>
           <li>所有 implementation tasks 目前仍未完成；archive preflight 不應在實作前視為通過。</li>
@@ -557,7 +558,7 @@
     </main>
 
     <footer>
-      <p>Source of truth: <code>proposal.md</code>, <code>design.md</code>, <code>tasks.md</code>, and <code>specs/session-owner-boundary/spec.md</code>. This explainer is a decision-review companion only.</p>
+      <p>Source of truth: <code>proposal.md</code>, <code>design.md</code>, <code>tasks.md</code>, and <code>specs/session-owner-boundary/spec.md</code>. This explainer mirrors those sources and never supersedes them.</p>
     </footer>
   </div>
 
