@@ -14,6 +14,10 @@
 			"types": "./dist/messages.d.ts",
 			"import": "./dist/messages.js"
 		},
+		"./owner": {
+			"types": "./dist/owner/index.d.ts",
+			"import": "./dist/owner/index.js"
+		},
 		"./session-cwd": {
 			"types": "./dist/session-cwd.d.ts",
 			"import": "./dist/session-cwd.js"
