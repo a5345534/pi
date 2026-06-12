@@ -1,4 +1,7 @@
 node_modules/
+.worktree/
+.worktrees/
+openspec/
 dist/
 *.log
 .DS_Store
