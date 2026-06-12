@@ -219,6 +219,12 @@ export {
 	type ThinkingLevelChangeEntry,
 } from "./core/session-manager.ts";
 export {
+	AgentSessionOwner,
+	type AgentSessionOwnerOptions,
+	type CodingAgentSessionClient,
+	createAgentSessionOwner,
+} from "./core/session-owner-adapter.ts";
+export {
 	type CompactionSettings,
 	type DefaultProjectTrust,
 	type ImageSettings,
