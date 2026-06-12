@@ -7,6 +7,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { SessionClient, SessionCommand } from "@a5345534/pi-session";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
 	type AssistantMessage,
@@ -82,6 +83,7 @@ import { BUILT_IN_PROVIDER_DISPLAY_NAMES } from "../../core/provider-display-nam
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
 import { type SessionContext, SessionManager } from "../../core/session-manager.ts";
+import { createAgentSessionOwner } from "../../core/session-owner-adapter.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
@@ -264,6 +266,9 @@ export interface InteractiveModeOptions {
 
 export class InteractiveMode {
 	private runtimeHost: AgentSessionRuntime;
+	private sessionClient: SessionClient;
+	private replacingViaSessionClient = false;
+	private hasBoundSession = false;
 	private ui: TUI;
 	private chatContainer: Container;
 	private pendingMessagesContainer: Container;
@@ -386,8 +391,45 @@ export class InteractiveMode {
 		return this.session.settingsManager;
 	}
 
+	private createSessionClient(): SessionClient {
+		return createAgentSessionOwner(this.runtimeHost, { ownerId: "coding-agent-interactive" });
+	}
+
+	private isSessionOwnerCancellation(error: unknown, message: string): boolean {
+		return error instanceof Error && error.message === message;
+	}
+
+	private async runClientReplacement(
+		cancelledMessage: string,
+		operation: () => Promise<unknown>,
+	): Promise<{ cancelled: boolean }> {
+		this.replacingViaSessionClient = true;
+		try {
+			await operation();
+			return { cancelled: false };
+		} catch (error) {
+			if (this.isSessionOwnerCancellation(error, cancelledMessage)) {
+				return { cancelled: true };
+			}
+			throw error;
+		} finally {
+			this.replacingViaSessionClient = false;
+		}
+	}
+
+	private sendSessionCommand(command: SessionCommand): Promise<void> {
+		return this.sessionClient.sendCommand(this.session.sessionId, command);
+	}
+
+	private abortActiveTurn(reason = "interactive abort"): void {
+		void this.sendSessionCommand({ type: "turn.abort", reason }).catch((error: unknown) => {
+			this.showError(error instanceof Error ? error.message : String(error));
+		});
+	}
+
 	constructor(runtimeHost: AgentSessionRuntime, options: InteractiveModeOptions = {}) {
 		this.runtimeHost = runtimeHost;
+		this.sessionClient = this.createSessionClient();
 		this.options = options;
 		this.autoTrustOnReloadCwd = options.autoTrustOnReloadCwd;
 		this.runtimeHost.setBeforeSessionInvalidate(() => {
@@ -1624,6 +1666,10 @@ export class InteractiveMode {
 	private async rebindCurrentSession(): Promise<void> {
 		this.unsubscribe?.();
 		this.unsubscribe = undefined;
+		if (this.hasBoundSession && !this.replacingViaSessionClient) {
+			this.sessionClient = this.createSessionClient();
+		}
+		this.hasBoundSession = true;
 		this.applyRuntimeSettings();
 		await this.bindCurrentSessionExtensions();
 		this.subscribeToAgent();
@@ -3807,7 +3853,7 @@ export class InteractiveMode {
 		if (allQueued.length === 0) {
 			this.updatePendingMessagesDisplay();
 			if (options?.abort) {
-				this.agent.abort();
+				this.abortActiveTurn();
 			}
 			return 0;
 		}
@@ -3817,7 +3863,7 @@ export class InteractiveMode {
 		this.editor.setText(combinedText);
 		this.updatePendingMessagesDisplay();
 		if (options?.abort) {
-			this.agent.abort();
+			this.abortActiveTurn();
 		}
 		return allQueued.length;
 	}
@@ -4368,7 +4414,17 @@ export class InteractiveMode {
 				userMessages.map((m) => ({ id: m.entryId, text: m.text })),
 				async (entryId) => {
 					try {
-						const result = await this.runtimeHost.fork(entryId);
+						const selectedText = userMessages.find((message) => message.entryId === entryId)?.text ?? "";
+						const sourceSessionId = this.session.sessionId;
+						const result = await this.runClientReplacement("Session fork cancelled", () =>
+							this.sendSessionCommand({
+								type: "session.fork",
+								target: {
+									source: { kind: "session-id", sessionId: sourceSessionId },
+									entryId,
+								},
+							}),
+						);
 						if (result.cancelled) {
 							done();
 							this.ui.requestRender();
@@ -4376,7 +4432,7 @@ export class InteractiveMode {
 						}
 
 						this.renderCurrentSessionState();
-						this.editor.setText(result.selectedText ?? "");
+						this.editor.setText(selectedText);
 						done();
 						this.showStatus("Forked to new session");
 					} catch (error: unknown) {
@@ -5179,13 +5235,25 @@ export class InteractiveMode {
 			return;
 		}
 
+		const importSession = (cwd?: string) =>
+			this.runClientReplacement("Session import cancelled", () =>
+				this.sendSessionCommand({
+					type: "session.import",
+					source: {
+						kind: "jsonl-file",
+						path: inputPath,
+						...(cwd ? { cwd } : {}),
+					},
+				}),
+			);
+
 		try {
 			if (this.loadingAnimation) {
 				this.loadingAnimation.stop();
 				this.loadingAnimation = undefined;
 			}
 			this.statusContainer.clear();
-			const result = await this.runtimeHost.importFromJsonl(inputPath);
+			const result = await importSession();
 			if (result.cancelled) {
 				this.showStatus("Import cancelled");
 				return;
@@ -5199,7 +5267,7 @@ export class InteractiveMode {
 					this.showStatus("Import cancelled");
 					return;
 				}
-				const result = await this.runtimeHost.importFromJsonl(inputPath, selectedCwd);
+				const result = await importSession(selectedCwd);
 				if (result.cancelled) {
 					this.showStatus("Import cancelled");
 					return;
@@ -5539,7 +5607,12 @@ export class InteractiveMode {
 		}
 		this.statusContainer.clear();
 		try {
-			const result = await this.runtimeHost.newSession();
+			const result = await this.runClientReplacement("Session creation cancelled", () =>
+				this.sendSessionCommand({
+					type: "session.new",
+					options: { cwd: this.sessionManager.getCwd() },
+				}),
+			);
 			if (result.cancelled) {
 				return;
 			}
@@ -5712,7 +5785,10 @@ export class InteractiveMode {
 		this.statusContainer.clear();
 
 		try {
-			await this.session.compact(customInstructions);
+			await this.sendSessionCommand({
+				type: "context.compact",
+				instructions: customInstructions,
+			});
 		} catch {
 			// Ignore, will be emitted as an event
 		}
