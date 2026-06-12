@@ -221,6 +221,10 @@ export class AgentSessionRuntime {
 	}
 
 	async newSession(options?: {
+		cwd?: string;
+		sessionDir?: string;
+		id?: string;
+		name?: string;
 		parentSession?: string;
 		setup?: (sessionManager: SessionManager) => Promise<void>;
 		withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
@@ -231,18 +235,23 @@ export class AgentSessionRuntime {
 		}
 
 		const previousSessionFile = this.session.sessionFile;
-		const sessionDir = this.session.sessionManager.getSessionDir();
+		const cwd = options?.cwd ?? this.cwd;
+		const sessionDir = options?.sessionDir ?? this.session.sessionManager.getSessionDir();
+		const newSessionOptions =
+			options?.id !== undefined || options?.parentSession !== undefined
+				? { id: options.id, parentSession: options.parentSession }
+				: undefined;
 		const sessionManager = this.session.sessionManager.isPersisted()
-			? SessionManager.create(this.cwd, sessionDir)
-			: SessionManager.inMemory(this.cwd);
-		if (options?.parentSession) {
-			sessionManager.newSession({ parentSession: options.parentSession });
+			? SessionManager.create(cwd, sessionDir, newSessionOptions)
+			: SessionManager.inMemory(cwd);
+		if (!this.session.sessionManager.isPersisted() && newSessionOptions) {
+			sessionManager.newSession(newSessionOptions);
 		}
 
 		await this.teardownCurrent("new", sessionManager.getSessionFile());
 		this.apply(
 			await this.createRuntime({
-				cwd: this.cwd,
+				cwd,
 				agentDir: this.services.agentDir,
 				sessionManager,
 				sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
@@ -251,6 +260,9 @@ export class AgentSessionRuntime {
 		if (options?.setup) {
 			await options.setup(this.session.sessionManager);
 			this.session.agent.state.messages = this.session.sessionManager.buildSessionContext().messages;
+		}
+		if (options?.name) {
+			this.session.setSessionName(options.name);
 		}
 		await this.finishSessionReplacement(options?.withSession);
 		return { cancelled: false };
