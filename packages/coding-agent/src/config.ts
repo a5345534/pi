@@ -1,4 +1,4 @@
-import { configureSessionStorageDefaults } from "@a5345534/pi-session/session-manager";
+import { configureSessionStorageDefaults } from "@a5345534/pi-session/config";
 import { accessSync, constants, existsSync, readFileSync, realpathSync } from "fs";
 import { homedir } from "os";
 import { basename, dirname, join, resolve, sep, win32 } from "path";

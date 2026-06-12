@@ -79,7 +79,7 @@ describe("AgentSessionOwner adapter", () => {
 		const runtimeHost = await createAgentSessionRuntime(createRuntime, {
 			cwd: tempDir,
 			agentDir: tempDir,
-			sessionManager: SessionManager.create(tempDir),
+			sessionManager: SessionManager.create(tempDir, { agentDir: tempDir }),
 		});
 		const owner = createAgentSessionOwner(runtimeHost, { ownerId: "test-owner" });
 
