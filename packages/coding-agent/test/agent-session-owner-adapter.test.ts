@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionOwnerEvent } from "@a5345534/pi-session";
-import { type FauxResponseStep, fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
+import { type FauxResponseStep, fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	type CreateAgentSessionRuntimeFactory,
@@ -11,6 +12,7 @@ import {
 	createAgentSessionServices,
 } from "../src/core/agent-session-runtime.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import type { ToolDefinition } from "../src/core/extensions/types.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { createAgentSessionOwner } from "../src/core/session-owner-adapter.ts";
 
@@ -23,7 +25,21 @@ describe("AgentSessionOwner adapter", () => {
 		}
 	});
 
-	async function createOwnerHost(options: { responses?: FauxResponseStep[]; tokensPerSecond?: number } = {}) {
+	function textFromContent(content: string | readonly { readonly type: string; readonly text?: string }[]): string {
+		if (typeof content === "string") {
+			return content;
+		}
+		return content
+			.filter((part): part is { readonly type: "text"; readonly text: string } => {
+				return part.type === "text" && typeof part.text === "string";
+			})
+			.map((part) => part.text)
+			.join("");
+	}
+
+	async function createOwnerHost(
+		options: { responses?: FauxResponseStep[]; tokensPerSecond?: number; customTools?: ToolDefinition[] } = {},
+	) {
 		const tempDir = join(tmpdir(), `pi-owner-adapter-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
 
@@ -54,6 +70,7 @@ describe("AgentSessionOwner adapter", () => {
 					sessionManager,
 					sessionStartEvent,
 					model: faux.getModel(),
+					customTools: options.customTools,
 				})),
 				services,
 				diagnostics: services.diagnostics,
@@ -179,6 +196,107 @@ describe("AgentSessionOwner adapter", () => {
 		expect(importedSnapshot.messages.map((message) => message.content)).toEqual([
 			"original prompt",
 			"original reply",
+		]);
+	});
+
+	it("maps prompt queueing, tool calls, and JSONL ordering through owner commands", async () => {
+		let releaseToolExecution: (() => void) | undefined;
+		const toolRelease = new Promise<void>((resolve) => {
+			releaseToolExecution = resolve;
+		});
+		const waitToolParameters = Type.Object({});
+		const waitTool = {
+			name: "owner_wait",
+			label: "Owner Wait",
+			description: "Waits until the test releases execution",
+			parameters: waitToolParameters,
+			execute: async (_toolCallId, _params, _signal, onUpdate) => {
+				onUpdate?.({
+					content: [{ type: "text", text: "waiting" }],
+					details: { phase: "waiting" },
+				});
+				await toolRelease;
+				return {
+					content: [{ type: "text", text: "released" }],
+					details: { phase: "released" },
+				};
+			},
+		} satisfies ToolDefinition<typeof waitToolParameters, { readonly phase: string }>;
+
+		const { owner, runtimeHost } = await createOwnerHost({
+			responses: [
+				fauxAssistantMessage(fauxToolCall("owner_wait", {}, { id: "tool-owner-wait" }), {
+					stopReason: "toolUse",
+				}),
+				fauxAssistantMessage("first turn done"),
+				fauxAssistantMessage("queued turn done"),
+			],
+			customTools: [waitTool],
+		});
+		const sessionId = runtimeHost.session.sessionId;
+		const events: SessionOwnerEvent[] = [];
+		const toolStarted = new Promise<void>((resolve) => {
+			owner.subscribe(sessionId, (event) => {
+				events.push(event);
+				if (event.type === "tool.started" && event.toolCall.name === "owner_wait") {
+					resolve();
+				}
+			});
+		});
+
+		await owner.sendCommand(sessionId, {
+			type: "prompt.submit",
+			commandId: "cmd-first",
+			prompt: { content: "first prompt" },
+		});
+		await toolStarted;
+		await owner.sendCommand(sessionId, {
+			type: "prompt.submit",
+			commandId: "cmd-queued",
+			prompt: { content: "queued prompt" },
+		});
+
+		const queuedSnapshot = await owner.getSnapshot(sessionId);
+		expect(queuedSnapshot.state.queuedCommandCount).toBe(1);
+
+		releaseToolExecution?.();
+		await runtimeHost.session.agent.waitForIdle();
+
+		const eventTypes = events.map((event) => event.type);
+		expect(eventTypes).toContain("tool.started");
+		expect(eventTypes).toContain("tool.progress");
+		expect(eventTypes).toContain("tool.completed");
+		expect(
+			events
+				.filter(
+					(event): event is Extract<SessionOwnerEvent, { type: "turn.started" }> => event.type === "turn.started",
+				)
+				.map((event) => event.commandId)
+				.filter((commandId): commandId is string => commandId !== undefined),
+		).toEqual(["cmd-first", "cmd-queued"]);
+		const completedTool = events.find(
+			(event): event is Extract<SessionOwnerEvent, { type: "tool.completed" }> => event.type === "tool.completed",
+		);
+		expect(completedTool?.toolCall).toMatchObject({
+			id: "tool-owner-wait",
+			name: "owner_wait",
+			status: "completed",
+		});
+
+		const orderedMessages = runtimeHost.session.sessionManager
+			.getEntries()
+			.filter((entry) => entry.type === "message")
+			.map((entry) => {
+				const content = "content" in entry.message ? textFromContent(entry.message.content) : "";
+				return `${entry.message.role}:${content}`;
+			});
+		expect(orderedMessages).toEqual([
+			"user:first prompt",
+			"assistant:",
+			"toolResult:released",
+			"assistant:first turn done",
+			"user:queued prompt",
+			"assistant:queued turn done",
 		]);
 	});
 
