@@ -21,6 +21,7 @@
  * Then use /model to select custom-anthropic/claude-sonnet-4-5
  */
 
+import type { ExtensionAPI } from "@a5345534/pi-coding-agent";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ContentBlockParam, MessageCreateParamsStreaming } from "@anthropic-ai/sdk/resources/messages.js";
 import {
@@ -43,7 +44,6 @@ import {
 	type ToolCall,
 	type ToolResultMessage,
 } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // =============================================================================
 // OAuth Implementation (copied from packages/ai/src/utils/oauth/anthropic.ts)

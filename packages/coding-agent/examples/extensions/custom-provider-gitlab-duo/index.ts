@@ -9,6 +9,7 @@
  *   # Then /login gitlab-duo, or set GITLAB_TOKEN=glpat-...
  */
 
+import type { ExtensionAPI } from "@a5345534/pi-coding-agent";
 import {
 	type Api,
 	type AssistantMessageEventStream,
@@ -22,7 +23,6 @@ import {
 	streamSimpleOpenAIResponses,
 	type ThinkingLevelMap,
 } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // =============================================================================
 // Constants

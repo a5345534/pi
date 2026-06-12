@@ -12,7 +12,7 @@ import {
 } from "../modes/interactive/components/first-time-setup.ts";
 import { detectTerminalBackground, initTheme, setTheme } from "../modes/interactive/theme/theme.ts";
 
-const OFFICIAL_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
+const OFFICIAL_PACKAGE_NAME = "@a5345534/pi-coding-agent";
 const OFFICIAL_APP_NAME = "pi";
 const OFFICIAL_CONFIG_DIR_NAME = ".pi";
 

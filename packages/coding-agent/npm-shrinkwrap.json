@@ -1,17 +1,17 @@
 {
-	"name": "@earendil-works/pi-coding-agent",
+	"name": "@a5345534/pi-coding-agent",
 	"version": "0.79.1",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
-			"name": "@earendil-works/pi-coding-agent",
+			"name": "@a5345534/pi-coding-agent",
 			"version": "0.79.1",
 			"license": "MIT",
 			"dependencies": {
 				"@earendil-works/pi-agent-core": "^0.79.1",
 				"@earendil-works/pi-ai": "^0.79.1",
-				"@earendil-works/pi-session": "^0.79.1",
+				"@a5345534/pi-session": "^0.79.1",
 				"@earendil-works/pi-tui": "^0.79.1",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
@@ -33,6 +33,18 @@
 			},
 			"bin": {
 				"pi-fork": "dist/cli.js"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
+		"node_modules/@a5345534/pi-session": {
+			"version": "0.79.1",
+			"resolved": "https://registry.npmjs.org/@a5345534/pi-session/-/pi-session-0.79.1.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"@earendil-works/pi-agent-core": "^0.79.1",
+				"@earendil-works/pi-ai": "^0.79.1"
 			},
 			"engines": {
 				"node": ">=22.19.0"
@@ -505,18 +517,6 @@
 			},
 			"bin": {
 				"pi-ai": "./dist/cli.js"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
-		"node_modules/@earendil-works/pi-session": {
-			"version": "0.79.1",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-session/-/pi-session-0.79.1.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"@earendil-works/pi-agent-core": "^0.79.1",
-				"@earendil-works/pi-ai": "^0.79.1"
 			},
 			"engines": {
 				"node": ">=22.19.0"

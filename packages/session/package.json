@@ -1,5 +1,5 @@
 {
-	"name": "@earendil-works/pi-session",
+	"name": "@a5345534/pi-session",
 	"version": "0.79.1",
 	"description": "Session persistence and tree management for Pi agents",
 	"type": "module",
@@ -45,7 +45,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
+		"url": "git+https://github.com/a5345534/pi.git",
 		"directory": "packages/session"
 	},
 	"engines": {

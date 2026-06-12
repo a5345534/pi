@@ -9,7 +9,8 @@ const packages = [
 	{ directory: "packages/ai", name: "@earendil-works/pi-ai" },
 	{ directory: "packages/tui", name: "@earendil-works/pi-tui" },
 	{ directory: "packages/agent", name: "@earendil-works/pi-agent-core" },
-	{ directory: "packages/coding-agent", name: "@earendil-works/pi-coding-agent" },
+	{ directory: "packages/session", name: "@a5345534/pi-session" },
+	{ directory: "packages/coding-agent", name: "@a5345534/pi-coding-agent" },
 ];
 
 function printUsage() {

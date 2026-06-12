@@ -1,1 +1,1 @@
-export * from "@earendil-works/pi-session/session-manager";
+export * from "@a5345534/pi-session/session-manager";
