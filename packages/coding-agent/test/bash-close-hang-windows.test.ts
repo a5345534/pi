@@ -17,7 +17,7 @@ function createInheritedStdioCommand(pidFile: string): string {
 		"const fs=require('fs');" +
 		"const {spawn}=require('child_process');" +
 		"const child=spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'inherit',detached:true});" +
-		"fs.writeFileSync(process.argv[1], String(child.pid));" +
+		"fs.writeFileSync(process.argv[1], String(child.pi-forkd));" +
 		"child.unref();" +
 		"console.log('child-exiting');" +
 		'" ' +
@@ -82,7 +82,7 @@ describe.skipIf(process.platform !== "win32")("Windows child-process close handl
 	});
 
 	it("executeBash resolves after the shell exits even if inherited stdio handles stay open", async () => {
-		const pidFile = join(testDir, "executor-grandchild.pid");
+		const pidFile = join(testDir, "executor-grandchild.pi-forkd");
 		const command = createInheritedStdioCommand(pidFile);
 		const controller = new AbortController();
 
@@ -107,7 +107,7 @@ describe.skipIf(process.platform !== "win32")("Windows child-process close handl
 	});
 
 	it("bash tool resolves after the shell exits even if inherited stdio handles stay open", async () => {
-		const pidFile = join(testDir, "tool-grandchild.pid");
+		const pidFile = join(testDir, "tool-grandchild.pi-forkd");
 		const command = createInheritedStdioCommand(pidFile);
 		const controller = new AbortController();
 		const bashTool = createBashTool(testDir);
